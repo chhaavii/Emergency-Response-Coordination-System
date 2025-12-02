@@ -1,0 +1,1327 @@
+
+================================================================================
+File: code_to_text.py
+================================================================================
+
+import os
+import sys
+from pathlib import Path
+
+def get_source_files(directory, extensions=None):
+    if extensions is None:
+        extensions = {'.py', '.java', '.js', '.html', '.css', '.cpp', '.c', '.h', '.hpp', '.cs', '.go', '.rb', '.php', '.swift', '.kt'}
+    
+    source_files = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if Path(file).suffix.lower() in extensions:
+                source_files.append(os.path.join(root, file))
+    return source_files
+
+def read_file_content(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except Exception as e:
+        return f"Error reading {file_path}: {str(e)}\n"
+
+def write_to_output(directory, output_file='all_codes.txt'):
+    output_path = os.path.join(directory, output_file)
+    source_files = get_source_files(directory)
+    
+    with open(output_path, 'w', encoding='utf-8') as outfile:
+        for file_path in source_files:
+            rel_path = os.path.relpath(file_path, directory)
+            outfile.write(f"\n{'='*80}\n")
+            outfile.write(f"File: {rel_path}\n")
+            outfile.write(f"{'='*80}\n\n")
+            
+            content = read_file_content(file_path)
+            outfile.write(content)
+            outfile.write("\n\n")
+    
+    print(f"Successfully wrote {len(source_files)} source files to {output_path}")
+
+if __name__ == "__main__":
+    # Use the current directory if no directory is specified
+    target_dir = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
+    write_to_output(target_dir)
+
+
+
+================================================================================
+File: src/main/java/com/emergency/EmergencyResponseSystem.java
+================================================================================
+
+package com.emergency;
+
+import com.emergency.model.*;
+import com.emergency.model.emergency.Emergency;
+import com.emergency.service.EmergencyService;
+import com.emergency.service.EmergencyServiceImpl;
+
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import com.emergency.model.emergency.EmergencyStatus;
+
+public class EmergencyResponseSystem {
+    private final EmergencyService emergencyService;
+    private final Scanner scanner;
+    private User currentUser;
+    private final Map<String, User> users;
+    private final ExecutorService executorService;
+    private boolean running;
+
+    public EmergencyResponseSystem() {
+        this.emergencyService = new EmergencyServiceImpl();
+        this.scanner = new Scanner(System.in);
+        this.users = new HashMap<>();
+        this.executorService = Executors.newCachedThreadPool();
+        this.running = true;
+        
+        // Initialize with some test users
+        initializeTestData();
+    }
+
+    private void initializeTestData() {
+        // Create some test users
+        User citizen1 = new Citizen("citizen1", "John Doe", "john@example.com", "1234567890", 
+                                 "123 Main St", emergencyService);
+        User citizen2 = new Citizen("citizen2", "Jane Smith", "jane@example.com", "0987654321",
+                                 "456 Oak Ave", emergencyService);
+        
+        User responder1 = new Responder("resp1", "Firefighter Bob", "bob@firedept.org", "1112223333",
+                                     "Fire Department", "Fire Suppression", emergencyService);
+        User responder2 = new Responder("resp2", "Officer Alice", "alice@police.org", "4445556666",
+                                     "Police Department", "Law Enforcement", emergencyService);
+        
+        User admin = new Admin("admin1", "Admin User", "admin@emergency.org", "9998887777", emergencyService);
+        
+        // Register users
+        users.put(citizen1.getId(), citizen1);
+        users.put(citizen2.getId(), citizen2);
+        users.put(responder1.getId(), responder1);
+        users.put(responder2.getId(), responder2);
+        users.put(admin.getId(), admin);
+        
+        // Register responders with the emergency service
+        emergencyService.registerResponder((Responder) responder1);
+        emergencyService.registerResponder((Responder) responder2);
+    }
+
+    public void start() {
+        System.out.println("=== Emergency Response Coordination System ===\n");
+        
+        while (running) {
+            if (currentUser == null) {
+                showLoginMenu();
+            } else {
+                showUserMenu();
+            }
+        }
+        
+        shutdown();
+    }
+
+    private void showLoginMenu() {
+        System.out.println("\n=== Login ===");
+        System.out.println("1. Login as Citizen");
+        System.out.println("2. Login as Responder");
+        System.out.println("3. Login as Admin");
+        System.out.println("4. Exit");
+        System.out.print("Select an option: ");
+        
+        int choice = readIntInput(1, 4);
+        
+        switch (choice) {
+            case 1:
+                loginAsCitizen();
+                break;
+            case 2:
+                loginAsResponder();
+                break;
+            case 3:
+                loginAsAdmin();
+                break;
+            case 4:
+                running = false;
+                break;
+        }
+    }
+
+    private void loginAsCitizen() {
+        System.out.println("\nAvailable Citizens:");
+        users.values().stream()
+             .filter(user -> user instanceof Citizen)
+             .forEach(user -> System.out.println("ID: " + user.getId() + " - " + user.getName()));
+             
+        System.out.print("Enter citizen ID: ");
+        String userId = scanner.nextLine().trim();
+        
+        User user = users.get(userId);
+        if (user instanceof Citizen) {
+            currentUser = user;
+            System.out.println("\nWelcome, " + user.getName() + "!");
+        } else {
+            System.out.println("Invalid citizen ID.");
+        }
+    }
+
+    private void loginAsResponder() {
+        System.out.println("\nAvailable Responders:");
+        users.values().stream()
+             .filter(user -> user instanceof Responder)
+             .forEach(user -> System.out.println("ID: " + user.getId() + " - " + user.getName()));
+             
+        System.out.print("Enter responder ID: ");
+        String userId = scanner.nextLine().trim();
+        
+        User user = users.get(userId);
+        if (user instanceof Responder) {
+            currentUser = user;
+            System.out.println("\nWelcome, " + user.getName() + "!");
+        } else {
+            System.out.println("Invalid responder ID.");
+        }
+    }
+
+    private void loginAsAdmin() {
+        System.out.print("\nEnter admin username: ");
+        String username = scanner.nextLine().trim();
+        
+        // In a real system, you would validate credentials properly
+        User user = users.values().stream()
+                        .filter(u -> u instanceof Admin && u.getId().equals(username))
+                        .findFirst()
+                        .orElse(null);
+                        
+        if (user != null) {
+            currentUser = user;
+            System.out.println("\nWelcome, Administrator!");
+        } else {
+            System.out.println("Invalid admin credentials.");
+        }
+    }
+
+    private void showUserMenu() {
+        if (currentUser instanceof Citizen) {
+            showCitizenMenu();
+        } else if (currentUser instanceof Responder) {
+            showResponderMenu();
+        } else if (currentUser instanceof Admin) {
+            showAdminMenu();
+        }
+    }
+
+    private void showCitizenMenu() {
+        Citizen citizen = (Citizen) currentUser;
+        citizen.displayMenu();
+        
+        int choice = readIntInput(1, 3);
+        
+        switch (choice) {
+            case 1:
+                reportEmergency();
+                break;
+            case 2:
+                viewReportedEmergencies();
+                break;
+            case 3:
+                System.out.println("Logging out...");
+                currentUser = null;
+                break;
+        }
+    }
+
+    private void showResponderMenu() {
+        Responder responder = (Responder) currentUser;
+        
+        while (currentUser != null) {
+            responder.displayMenu();
+            int choice = readIntInput(1, 4);
+            
+            switch (choice) {
+                case 1:
+                    viewAssignedEmergencies(responder);
+                    break;
+                case 2:
+                    markEmergencyResolved(responder);
+                    break;
+                case 3:
+                    updateAvailability(responder);
+                    break;
+                case 4:
+                    System.out.println("Logging out...");
+                    currentUser = null;
+                    return;
+            }
+        }
+    }
+    
+    private void viewAssignedEmergencies(Responder responder) {
+        System.out.println("\n=== Your Assigned Emergencies ===");
+        List<Emergency> emergencies = emergencyService.getAllEmergencies();
+        
+        List<Emergency> assignedEmergencies = emergencies.stream()
+            .filter(e -> e.getAssignedResponder() != null && 
+                        e.getAssignedResponder().getId().equals(responder.getId()) &&
+                        e.getStatus() != EmergencyStatus.RESOLVED &&
+                        e.getStatus() != EmergencyStatus.CANCELLED)
+            .toList();
+            
+        if (assignedEmergencies.isEmpty()) {
+            System.out.println("You have no assigned emergencies.");
+            return;
+        }
+        
+        System.out.println("ID                                   | Type            | Status     | Location    | Reporter");
+        System.out.println("--------------------------------------+-----------------+------------+-------------+------------");
+        
+        for (Emergency emergency : assignedEmergencies) {
+            System.out.printf("%-37s | %-15s | %-10s | %-11s | %s%n",
+                emergency.getId().substring(0, Math.min(8, emergency.getId().length())) + "...",
+                emergency.getType(),
+                emergency.getStatus(),
+                emergency.getLocation().length() > 10 ? 
+                    emergency.getLocation().substring(0, 7) + "..." : emergency.getLocation(),
+                emergency.getReporter().getName());
+        }
+    }
+    
+    private void markEmergencyResolved(Responder responder) {
+        List<Emergency> activeEmergencies = emergencyService.getAllEmergencies().stream()
+            .filter(e -> e.getAssignedResponder() != null && 
+                        e.getAssignedResponder().getId().equals(responder.getId()) &&
+                        e.getStatus() != EmergencyStatus.RESOLVED &&
+                        e.getStatus() != EmergencyStatus.CANCELLED)
+            .toList();
+            
+        if (activeEmergencies.isEmpty()) {
+            System.out.println("\nNo active emergencies to resolve.");
+            return;
+        }
+        
+        System.out.println("\nSelect an emergency to mark as resolved:");
+        for (int i = 0; i < activeEmergencies.size(); i++) {
+            Emergency e = activeEmergencies.get(i);
+            System.out.printf("%d. %s at %s (Status: %s)%n", 
+                i + 1, e.getType(), e.getLocation(), e.getStatus());
+        }
+        
+        System.out.print("Enter emergency number (0 to cancel): ");
+        int choice = readIntInput(0, activeEmergencies.size());
+        
+        if (choice > 0) {
+            Emergency emergency = activeEmergencies.get(choice - 1);
+            emergency.updateStatus(EmergencyStatus.RESOLVED);
+            System.out.println("\n[System] Emergency " + emergency.getId() + " marked as RESOLVED");
+        }
+    }
+    
+    private void updateAvailability(Responder responder) {
+        System.out.println("\nCurrent status: " + (responder.isAvailable() ? "Available" : "On Assignment"));
+        System.out.println("1. Set as Available");
+        System.out.println("2. Set as Unavailable");
+        System.out.print("Select option (0 to cancel): ");
+        
+        int choice = readIntInput(0, 2);
+        
+        if (choice == 1) {
+            // In a real implementation, we would update the responder's status in the service
+            System.out.println("\n[System] You are now marked as Available");
+        } else if (choice == 2) {
+            System.out.println("\n[System] You are now marked as Unavailable");
+        }
+    }
+
+    private void showAdminMenu() {
+        while (currentUser != null) {
+            System.out.println("\n=== Admin Dashboard ===");
+            System.out.println("1. View All Emergencies");
+            System.out.println("2. View All Responders");
+            System.out.println("3. Generate Report");
+            System.out.println("4. Logout");
+            
+            int choice = readIntInput(1, 4);
+            
+            switch (choice) {
+                case 1:
+                    viewAllEmergencies();
+                    break;
+                case 2:
+                    viewAllResponders();
+                    break;
+                case 3:
+                    generateReport();
+                    break;
+                case 4:
+                    System.out.println("Logging out...");
+                    currentUser = null;
+                    return;
+            }
+        }
+    }
+    
+    private void viewAllEmergencies() {
+        System.out.println("\n=== All Emergencies ===");
+        List<Emergency> emergencies = emergencyService.getAllEmergencies();
+        
+        if (emergencies.isEmpty()) {
+            System.out.println("No emergencies found in the system.");
+            return;
+        }
+        
+        System.out.println("ID                                   | Type            | Status     | Location    | Reporter      | Assigned To");
+        System.out.println("--------------------------------------+-----------------+------------+-------------+----------------+----------------");
+        
+        for (Emergency emergency : emergencies) {
+            String assignedTo = "None";
+            if (emergency.getAssignedResponder() != null) {
+                assignedTo = emergency.getAssignedResponder().getName();
+            }
+            
+            System.out.printf("%-37s | %-15s | %-10s | %-11s | %-14s | %s%n",
+                emergency.getId().substring(0, Math.min(8, emergency.getId().length())) + "...",
+                emergency.getType(),
+                emergency.getStatus(),
+                emergency.getLocation().length() > 10 ? emergency.getLocation().substring(0, 7) + "..." : emergency.getLocation(),
+                emergency.getReporter().getName(),
+                assignedTo);
+        }
+    }
+    
+    private void viewAllResponders() {
+        System.out.println("\n=== All Responders ===");
+        // This is a simplified view - in a real app, we'd get this from a UserService
+        users.values().stream()
+            .filter(user -> user instanceof Responder)
+            .map(user -> (Responder) user)
+            .forEach(responder -> {
+                System.out.println("\nID: " + responder.getId());
+                System.out.println("Name: " + responder.getName());
+                System.out.println("Department: " + responder.getDepartment());
+                System.out.println("Specialization: " + responder.getSpecialization());
+                System.out.println("Status: " + (responder.isAvailable() ? "Available" : "On Assignment"));
+            });
+    }
+    
+    private void generateReport() {
+        System.out.println("\n=== Emergency System Report ===");
+        List<Emergency> emergencies = emergencyService.getAllEmergencies();
+        long activeEmergencies = emergencies.stream()
+            .filter(e -> e.getStatus() != EmergencyStatus.RESOLVED && 
+                        e.getStatus() != EmergencyStatus.CANCELLED)
+            .count();
+            
+        System.out.println("Total Emergencies: " + emergencies.size());
+        System.out.println("Active Emergencies: " + activeEmergencies);
+        System.out.println("Resolved/Cancelled: " + (emergencies.size() - activeEmergencies));
+        
+        // Emergency type breakdown
+        System.out.println("\nEmergency Type Breakdown:");
+        emergencies.stream()
+            .collect(Collectors.groupingBy(Emergency::getType, Collectors.counting()))
+            .forEach((type, count) -> System.out.printf("- %-15s: %d%n", type, count));
+    }
+
+    private void reportEmergency() {
+        System.out.println("\n=== Report Emergency ===");
+        
+        System.out.print("Emergency type (FIRE, MEDICAL, POLICE, etc.): ");
+        String type = scanner.nextLine().trim();
+        
+        System.out.print("Location: ");
+        String location = scanner.nextLine().trim();
+        
+        System.out.print("Description: ");
+        String description = scanner.nextLine().trim();
+        
+        System.out.print("Severity (1-5, with 5 being most severe): ");
+        int severity = readIntInput(1, 5);
+        
+        try {
+            Emergency emergency = emergencyService.createEmergency(type, description, location, severity, currentUser);
+            System.out.println("\n[System] Emergency reported successfully! ID: " + emergency.getId());
+        } catch (Exception e) {
+            System.out.println("Error reporting emergency: " + e.getMessage());
+        }
+    }
+
+    private void viewReportedEmergencies() {
+        System.out.println("\n=== Your Reported Emergencies ===");
+        List<Emergency> emergencies = emergencyService.getAllEmergencies();
+        
+        emergencies.stream()
+                  .filter(e -> e.getReporter().equals(currentUser))
+                  .forEach(e -> System.out.println(
+                      String.format("ID: %s | Type: %s | Status: %s | Location: %s",
+                          e.getId(), e.getType(), e.getStatus(), e.getLocation())));
+    }
+
+    private int readIntInput(int min, int max) {
+        while (true) {
+            try {
+                System.out.print("\nEnter your choice (" + min + "-" + max + "): ");
+                int choice = Integer.parseInt(scanner.nextLine().trim());
+                if (choice >= min && choice <= max) {
+                    return choice;
+                }
+                System.out.println("Please enter a number between " + min + " and " + max + ".");
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a number.");
+            }
+        }
+    }
+
+    private void shutdown() {
+        System.out.println("\nShutting down Emergency Response System...");
+        if (emergencyService instanceof EmergencyServiceImpl) {
+            ((EmergencyServiceImpl) emergencyService).shutdown();
+        }
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        scanner.close();
+        System.out.println("System shutdown complete. Goodbye!");
+    }
+
+    public static void main(String[] args) {
+        EmergencyResponseSystem system = new EmergencyResponseSystem();
+        system.start();
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/patterns/observer/NotificationObserver.java
+================================================================================
+
+package com.emergency.patterns.observer;
+
+import com.emergency.model.emergency.Emergency;
+
+/**
+ * Observer Pattern - Interface for emergency notifications
+ */
+public interface NotificationObserver {
+    void update(Emergency emergency, String message);
+    String getObserverId();
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/patterns/singleton/SystemConfiguration.java
+================================================================================
+
+package com.emergency.patterns.singleton;
+
+import java.util.Properties;
+import java.time.LocalDateTime;
+
+/**
+ * Singleton Pattern - Manages global system configuration
+ */
+public class SystemConfiguration {
+    
+    private static SystemConfiguration instance;
+    private final Properties config;
+    private final LocalDateTime creationTime;
+    
+    private SystemConfiguration() {
+        config = new Properties();
+        creationTime = LocalDateTime.now();
+        initializeDefaultConfig();
+    }
+    
+    public static synchronized SystemConfiguration getInstance() {
+        if (instance == null) {
+            instance = new SystemConfiguration();
+        }
+        return instance;
+    }
+    
+    private void initializeDefaultConfig() {
+        config.setProperty("system.name", "Emergency Response System");
+        config.setProperty("system.version", "2.0");
+        config.setProperty("notification.interval", "5000");
+        config.setProperty("max.concurrent.emergencies", "1000");
+        config.setProperty("data.retention.days", "90");
+        config.setProperty("auto.assignment.enabled", "true");
+        config.setProperty("log.level", "INFO");
+    }
+    
+    public String getProperty(String key) {
+        return config.getProperty(key);
+    }
+    
+    public String getProperty(String key, String defaultValue) {
+        return config.getProperty(key, defaultValue);
+    }
+    
+    public void setProperty(String key, String value) {
+        config.setProperty(key, value);
+    }
+    
+    public int getIntProperty(String key, int defaultValue) {
+        try {
+            return Integer.parseInt(getProperty(key, String.valueOf(defaultValue)));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+    
+    public boolean getBooleanProperty(String key, boolean defaultValue) {
+        return Boolean.parseBoolean(getProperty(key, String.valueOf(defaultValue)));
+    }
+    
+    public LocalDateTime getCreationTime() {
+        return creationTime;
+    }
+    
+    // Prevent cloning
+    @Override
+    protected Object clone() throws CloneNotSupportedException {
+        throw new CloneNotSupportedException("Cloning of SystemConfiguration is not allowed");
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/patterns/factory/UserFactory.java
+================================================================================
+
+package com.emergency.patterns.factory;
+
+import com.emergency.model.*;
+import com.emergency.service.EmergencyService;
+
+/**
+ * Factory Pattern - Creates user objects based on type
+ */
+public class UserFactory {
+    
+    public static User createUser(String type, String id, String name, String email, 
+                                String phoneNumber, String additionalInfo, EmergencyService service) {
+        switch (type.toUpperCase()) {
+            case "CITIZEN":
+                return new Citizen(id, name, email, phoneNumber, additionalInfo, service);
+            case "RESPONDER":
+                // For responders, additionalInfo contains department|specialization
+                String[] parts = additionalInfo.split("\\|");
+                String department = parts.length > 0 ? parts[0] : "General";
+                String specialization = parts.length > 1 ? parts[1] : "General";
+                return new Responder(id, name, email, phoneNumber, department, specialization, service);
+            case "ADMIN":
+                return new Admin(id, name, email, phoneNumber, service);
+            default:
+                throw new IllegalArgumentException("Unknown user type: " + type);
+        }
+    }
+    
+    public static User createCitizen(String id, String name, String email, 
+                                   String phoneNumber, String address, EmergencyService service) {
+        return new Citizen(id, name, email, phoneNumber, address, service);
+    }
+    
+    public static User createResponder(String id, String name, String email, 
+                                     String phoneNumber, String department, 
+                                     String specialization, EmergencyService service) {
+        return new Responder(id, name, email, phoneNumber, department, specialization, service);
+    }
+    
+    public static User createAdmin(String id, String name, String email, 
+                                 String phoneNumber, EmergencyService service) {
+        return new Admin(id, name, email, phoneNumber, service);
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/patterns/strategy/SeverityBasedAssignment.java
+================================================================================
+
+package com.emergency.patterns.strategy;
+
+import com.emergency.model.emergency.Emergency;
+import com.emergency.model.Responder;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Strategy Pattern - Severity-based emergency assignment
+ */
+public class SeverityBasedAssignment implements EmergencyAssignmentStrategy {
+    
+    @Override
+    public Responder assignEmergency(Emergency emergency, List<Responder> availableResponders) {
+        if (availableResponders.isEmpty()) {
+            return null;
+        }
+        
+        // Assign based on severity and specialization
+        Optional<Responder> specializedResponder = findSpecializedResponder(emergency, availableResponders);
+        if (specializedResponder.isPresent()) {
+            return specializedResponder.get();
+        }
+        
+        // Fallback to round-robin based on department
+        return availableResponders.stream()
+            .findFirst()
+            .orElse(null);
+    }
+    
+    private Optional<Responder> findSpecializedResponder(Emergency emergency, List<Responder> responders) {
+        String emergencyType = emergency.getType().toString();
+        
+        return responders.stream()
+            .filter(Responder::isAvailable)
+            .filter(r -> isSpecializedForEmergency(r, emergencyType))
+            .findFirst();
+    }
+    
+    private boolean isSpecializedForEmergency(Responder responder, String emergencyType) {
+        String specialization = responder.getSpecialization().toLowerCase();
+        String department = responder.getDepartment().toLowerCase();
+        
+        return (emergencyType.contains("fire") && (specialization.contains("fire") || department.contains("fire"))) ||
+               (emergencyType.contains("medical") && (specialization.contains("medical") || department.contains("medical"))) ||
+               (emergencyType.contains("police") && (specialization.contains("law") || department.contains("police")));
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/patterns/strategy/EmergencyAssignmentStrategy.java
+================================================================================
+
+package com.emergency.patterns.strategy;
+
+import com.emergency.model.emergency.Emergency;
+import com.emergency.model.Responder;
+import java.util.List;
+
+/**
+ * Strategy Pattern - Defines interface for emergency assignment algorithms
+ */
+public interface EmergencyAssignmentStrategy {
+    Responder assignEmergency(Emergency emergency, List<Responder> availableResponders);
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/gui/EmergencyResponseGUI.java
+================================================================================
+
+
+
+
+================================================================================
+File: src/main/java/com/emergency/model/Admin.java
+================================================================================
+
+package com.emergency.model;
+
+import com.emergency.service.EmergencyService;
+import com.emergency.model.emergency.Emergency;
+import java.util.List;
+
+public class Admin extends User {
+    private EmergencyService emergencyService;
+
+    public Admin(String id, String name, String email, String phoneNumber, EmergencyService emergencyService) {
+        super(id, name, email, phoneNumber);
+        this.emergencyService = emergencyService;
+    }
+
+    public void viewAllEmergencies() {
+        System.out.println("\n=== All Active Emergencies ===");
+        List<Emergency> emergencies = emergencyService.getAllEmergencies();
+        if (emergencies.isEmpty()) {
+            System.out.println("No active emergencies.");
+        } else {
+            emergencies.forEach(emergency -> 
+                System.out.printf("ID: %s | Type: %s | Status: %s | Location: %s%n",
+                    emergency.getId(),
+                    emergency.getType(),
+                    emergency.getStatus(),
+                    emergency.getLocation())
+            );
+        }
+    }
+
+    public void viewAllResponders() {
+        System.out.println("\n=== All Responders ===");
+        // This would be implemented to show all responders and their status
+        System.out.println("Responder list functionality will be implemented here.");
+    }
+
+    public void generateReport() {
+        System.out.println("\n=== Generating Emergency Report ===");
+        // This would generate a more detailed report
+        System.out.println("Emergency report generation will be implemented here.");
+    }
+
+    @Override
+    public void displayMenu() {
+        System.out.println("\n=== Admin Menu ===");
+        System.out.println("1. View All Emergencies");
+        System.out.println("2. View All Responders");
+        System.out.println("3. Generate Report");
+        System.out.println("4. Exit");
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/model/User.java
+================================================================================
+
+package com.emergency.model;
+
+public abstract class User {
+    protected String id;
+    protected String name;
+    protected String email;
+    protected String phoneNumber;
+
+    public User(String id, String name, String email, String phoneNumber) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+    }
+
+    // Getters
+    public String getId() { return id; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public String getPhoneNumber() { return phoneNumber; }
+
+    // Abstract method for user actions
+    public abstract void displayMenu();
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/model/Citizen.java
+================================================================================
+
+package com.emergency.model;
+
+import com.emergency.service.EmergencyService;
+import com.emergency.exception.InvalidEmergencyTypeException;
+
+public class Citizen extends User {
+    private String address;
+    private EmergencyService emergencyService;
+
+    public Citizen(String id, String name, String email, String phoneNumber, String address, EmergencyService emergencyService) {
+        super(id, name, email, phoneNumber);
+        this.address = address;
+        this.emergencyService = emergencyService;
+    }
+
+    public void reportEmergency(String emergencyType, String description, String location, int severity) 
+            throws InvalidEmergencyTypeException {
+        System.out.println("\n[Citizen " + name + " is reporting a " + emergencyType + " emergency at " + location + "]");
+        emergencyService.createEmergency(emergencyType, description, location, severity, this);
+    }
+
+    public void receiveConfirmation(String emergencyId) {
+        System.out.println("\n[Citizen " + name + " received confirmation: Emergency " + emergencyId + " has been received and is being processed]");
+    }
+
+    @Override
+    public void displayMenu() {
+        System.out.println("\n=== Citizen Menu ===");
+        System.out.println("1. Report Emergency");
+        System.out.println("2. View Reported Emergencies");
+        System.out.println("3. Exit");
+    }
+
+    // Getters and setters
+    public String getAddress() { return address; }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/model/Responder.java
+================================================================================
+
+package com.emergency.model;
+
+import com.emergency.service.EmergencyService;
+import com.emergency.model.emergency.Emergency;
+
+public class Responder extends User {
+    private String department;
+    private String specialization;
+    private boolean available;
+    private Emergency currentEmergency;
+    private EmergencyService emergencyService;
+
+    public Responder(String id, String name, String email, String phoneNumber, 
+                    String department, String specialization, EmergencyService emergencyService) {
+        super(id, name, email, phoneNumber);
+        this.department = department;
+        this.specialization = specialization;
+        this.available = true;
+        this.emergencyService = emergencyService;
+    }
+
+    public void respondToEmergency(Emergency emergency) {
+        this.available = false;
+        this.currentEmergency = emergency;
+        System.out.println("\n[Responder " + name + " is now responding to emergency " + emergency.getId() + "]");
+        
+        // Simulate response time
+        new Thread(() -> {
+            try {
+                Thread.sleep(5000); // Simulate time taken to respond
+                completeEmergency();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
+    }
+
+    private void completeEmergency() {
+        if (currentEmergency != null) {
+            System.out.println("\n[Responder " + name + " has completed emergency " + currentEmergency.getId() + "]");
+            emergencyService.completeEmergency(currentEmergency.getId());
+            currentEmergency = null;
+            available = true;
+        }
+    }
+
+    public boolean isAvailable() {
+        return available;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public String getSpecialization() {
+        return specialization;
+    }
+
+    @Override
+    public void displayMenu() {
+        System.out.println("\n=== Responder Menu ===");
+        System.out.println("1. View Assigned Emergencies");
+        System.out.println("2. Mark Emergency as Resolved");
+        System.out.println("3. Update Availability");
+        System.out.println("4. Exit");
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/model/emergency/EmergencyType.java
+================================================================================
+
+package com.emergency.model.emergency;
+
+public enum EmergencyType {
+    FIRE,
+    MEDICAL,
+    POLICE,
+    TRAFFIC,
+    HAZMAT,
+    NATURAL_DISASTER,
+    OTHER;
+
+    public static EmergencyType fromString(String type) {
+        if (type == null || type.trim().isEmpty()) {
+            return OTHER;
+        }
+        
+        return switch (type.trim().toUpperCase()) {
+            case "FIRE" -> FIRE;
+            case "MEDICAL" -> MEDICAL;
+            case "POLICE" -> POLICE;
+            case "TRAFFIC" -> TRAFFIC;
+            case "HAZMAT" -> HAZMAT;
+            case "NATURAL_DISASTER" -> NATURAL_DISASTER;
+            default -> OTHER;
+        };
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/model/emergency/EmergencyStatus.java
+================================================================================
+
+package com.emergency.model.emergency;
+
+public enum EmergencyStatus {
+    REPORTED,       // Emergency has been reported but not yet assigned
+    ASSIGNED,       // Responder has been assigned
+    IN_PROGRESS,    // Responder is on the scene
+    RESOLVED,       // Emergency has been resolved
+    CANCELLED       // Emergency was cancelled (false alarm, etc.)
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/model/emergency/Emergency.java
+================================================================================
+
+package com.emergency.model.emergency;
+
+import com.emergency.model.User;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public class Emergency {
+    private final String id;
+    private final EmergencyType type;
+    private final String description;
+    private final String location;
+    private final int severity; // 1-5, with 5 being most severe
+    private final User reporter;
+    private EmergencyStatus status;
+    private User assignedResponder;
+    private final LocalDateTime reportedAt;
+    private LocalDateTime resolvedAt;
+
+    public Emergency(EmergencyType type, String description, String location, int severity, User reporter) {
+        this.id = UUID.randomUUID().toString();
+        this.type = type;
+        this.description = description;
+        this.location = location;
+        this.severity = Math.max(1, Math.min(5, severity)); // Ensure severity is between 1-5
+        this.reporter = reporter;
+        this.status = EmergencyStatus.REPORTED;
+        this.reportedAt = LocalDateTime.now();
+    }
+
+    public synchronized void assignResponder(User responder) {
+        if (responder == null) {
+            throw new IllegalArgumentException("Responder cannot be null");
+        }
+        this.assignedResponder = responder;
+        updateStatus(EmergencyStatus.ASSIGNED);
+        System.out.println("[System] Assigned " + responder.getName() + " to emergency " + id);
+    }
+
+    public synchronized void updateStatus(EmergencyStatus newStatus) {
+        if (newStatus == null) {
+            throw new IllegalArgumentException("Status cannot be null");
+        }
+        
+        // Validate status transition
+        if (this.status == EmergencyStatus.RESOLVED || this.status == EmergencyStatus.CANCELLED) {
+            throw new IllegalStateException("Cannot change status of a " + this.status + " emergency");
+        }
+        
+        this.status = newStatus;
+        
+        if (newStatus == EmergencyStatus.RESOLVED || newStatus == EmergencyStatus.CANCELLED) {
+            this.resolvedAt = LocalDateTime.now();
+            System.out.println("[System] Emergency " + id + " has been marked as " + newStatus);
+        } else if (newStatus == EmergencyStatus.IN_PROGRESS) {
+            System.out.println("[System] Emergency " + id + " is now IN_PROGRESS");
+        }
+    }
+
+    // Getters
+    public String getId() { return id; }
+    public EmergencyType getType() { return type; }
+    public String getDescription() { return description; }
+    public String getLocation() { return location; }
+    public int getSeverity() { return severity; }
+    public User getReporter() { return reporter; }
+    public EmergencyStatus getStatus() { return status; }
+    public User getAssignedResponder() { return assignedResponder; }
+    public LocalDateTime getReportedAt() { return reportedAt; }
+    public LocalDateTime getResolvedAt() { return resolvedAt; }
+
+    @Override
+    public String toString() {
+        return String.format("Emergency[%s] - %s at %s (Severity: %d, Status: %s)",
+                id, type, location, severity, status);
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/service/EmergencyServiceImpl.java
+================================================================================
+
+package com.emergency.service;
+
+import com.emergency.model.User;
+import com.emergency.model.Responder;
+import com.emergency.model.emergency.Emergency;
+import com.emergency.model.emergency.EmergencyStatus;
+import com.emergency.model.emergency.EmergencyType;
+import com.emergency.exception.InvalidEmergencyTypeException;
+import com.emergency.exception.NoAvailableResponderException;
+
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.*;
+
+public class EmergencyServiceImpl implements EmergencyService, Runnable {
+    private final Map<String, Emergency> emergencies = new ConcurrentHashMap<>();
+    private final List<Responder> responders = new CopyOnWriteArrayList<>();
+    private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private final long DISPATCH_INTERVAL_MS = 5000; // 5 seconds
+
+    public EmergencyServiceImpl() {
+        // Start the dispatcher thread
+        new Thread(this).start();
+    }
+
+    @Override
+    public Emergency createEmergency(String emergencyTypeStr, String description, String location, int severity, User reporter) 
+            throws InvalidEmergencyTypeException {
+        EmergencyType type;
+        try {
+            type = EmergencyType.fromString(emergencyTypeStr);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidEmergencyTypeException("Invalid emergency type: " + emergencyTypeStr);
+        }
+
+        Emergency emergency = new Emergency(type, description, location, severity, reporter);
+        
+        lock.writeLock().lock();
+        try {
+            emergencies.put(emergency.getId(), emergency);
+            System.out.println("[System] New emergency reported: " + emergency);
+            return emergency;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public boolean assignResponder(String emergencyId) throws NoAvailableResponderException {
+        lock.writeLock().lock();
+        try {
+            Emergency emergency = emergencies.get(emergencyId);
+            if (emergency == null || emergency.getStatus() != EmergencyStatus.REPORTED) {
+                return false;
+            }
+
+            // Find available responder (simplified matching)
+            Optional<Responder> responderOpt = responders.stream()
+                .filter(Responder::isAvailable)
+                .findFirst();
+
+            if (responderOpt.isPresent()) {
+                Responder responder = responderOpt.get();
+                emergency.assignResponder(responder);
+                System.out.println("[System] Assigned " + responder.getName() + " to emergency " + emergencyId);
+                
+                // In a real system, we would notify the responder here
+                return true;
+            } else {
+                throw new NoAvailableResponderException("No available responders for emergency " + emergencyId);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public boolean completeEmergency(String emergencyId) {
+        lock.writeLock().lock();
+        try {
+            Emergency emergency = emergencies.get(emergencyId);
+            if (emergency != null) {
+                emergency.updateStatus(EmergencyStatus.RESOLVED);
+                System.out.println("[System] Emergency " + emergencyId + " marked as resolved");
+                return true;
+            }
+            return false;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public List<Emergency> getAllEmergencies() {
+        lock.readLock().lock();
+        try {
+            return new ArrayList<>(emergencies.values());
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    @Override
+    public Optional<Emergency> getEmergencyById(String id) {
+        lock.readLock().lock();
+        try {
+            return Optional.ofNullable(emergencies.get(id));
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    @Override
+    public List<Emergency> getEmergenciesByStatus(String status) {
+        lock.readLock().lock();
+        try {
+            return emergencies.values().stream()
+                .filter(e -> e.getStatus().name().equalsIgnoreCase(status))
+                .toList();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    @Override
+    public void registerResponder(User responder) {
+        if (responder instanceof Responder) {
+            responders.add((Responder) responder);
+            System.out.println("[System] Registered responder: " + responder.getName());
+        }
+    }
+
+    @Override
+    public void unregisterResponder(String responderId) {
+        responders.removeIf(r -> r.getId().equals(responderId));
+    }
+
+    @Override
+    public void run() {
+        while (running.get()) {
+            try {
+                // Process pending emergencies
+                List<Emergency> pendingEmergencies = getEmergenciesByStatus("REPORTED");
+                for (Emergency emergency : pendingEmergencies) {
+                    try {
+                        assignResponder(emergency.getId());
+                    } catch (NoAvailableResponderException e) {
+                        System.out.println("[System] Warning: " + e.getMessage());
+                    }
+                }
+                
+                // Sleep before next dispatch cycle
+                Thread.sleep(DISPATCH_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception e) {
+                System.err.println("Error in dispatcher thread: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void shutdown() {
+        running.set(false);
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/service/EmergencyService.java
+================================================================================
+
+package com.emergency.service;
+
+import com.emergency.model.User;
+import com.emergency.model.emergency.Emergency;
+import com.emergency.exception.InvalidEmergencyTypeException;
+import com.emergency.exception.NoAvailableResponderException;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface EmergencyService {
+    Emergency createEmergency(String emergencyType, String description, String location, int severity, User reporter) 
+        throws InvalidEmergencyTypeException;
+    
+    boolean assignResponder(String emergencyId) throws NoAvailableResponderException;
+    
+    boolean completeEmergency(String emergencyId);
+    
+    List<Emergency> getAllEmergencies();
+    
+    Optional<Emergency> getEmergencyById(String id);
+    
+    List<Emergency> getEmergenciesByStatus(String status);
+    
+    void registerResponder(User responder);
+    
+    void unregisterResponder(String responderId);
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/exception/NoAvailableResponderException.java
+================================================================================
+
+package com.emergency.exception;
+
+public class NoAvailableResponderException extends Exception {
+    public NoAvailableResponderException(String message) {
+        super(message);
+    }
+
+    public NoAvailableResponderException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+
+
+================================================================================
+File: src/main/java/com/emergency/exception/InvalidEmergencyTypeException.java
+================================================================================
+
+package com.emergency.exception;
+
+public class InvalidEmergencyTypeException extends Exception {
+    public InvalidEmergencyTypeException(String message) {
+        super(message);
+    }
+
+    public InvalidEmergencyTypeException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+
